@@ -1,11 +1,13 @@
 import os
 import subprocess
+import threading
 import time
 import urllib.request
 import zipfile
 import shutil
+from flask import Flask
 
-# === 1️⃣ CONFIGURATION ===
+# === 1️⃣ CONFIG ===
 NGROK_AUTH = os.environ.get("NGROK_AUTH_TOKEN")
 PORT = os.environ.get("PORT", "5000")
 
@@ -15,7 +17,7 @@ if not NGROK_AUTH:
 NGROK_ZIP_URL = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.zip"
 NGROK_PATH = "/opt/render/project/src/ngrok"
 
-# === 2️⃣ DOWNLOAD NGROK IF NOT PRESENT ===
+# === 2️⃣ DOWNLOAD NGROK IF NEEDED ===
 if not os.path.exists(NGROK_PATH):
     print("⬇️ Downloading ngrok binary...")
     zip_path = "ngrok.zip"
@@ -27,27 +29,23 @@ if not os.path.exists(NGROK_PATH):
     os.remove(zip_path)
     print("✅ Ngrok downloaded successfully.")
 
-# === 3️⃣ AUTHENTICATE & START TUNNEL ===
-print("🔑 Adding ngrok auth token...")
-subprocess.run([NGROK_PATH, "config", "add-authtoken", NGROK_AUTH], check=True)
+# === 3️⃣ START NGROK IN BACKGROUND ===
+def start_ngrok():
+    print("🔑 Adding ngrok auth token...")
+    subprocess.run([NGROK_PATH, "config", "add-authtoken", NGROK_AUTH], check=True)
+    print("🚀 Starting ngrok tunnel on port", PORT)
+    subprocess.Popen([NGROK_PATH, "http", PORT])
+    time.sleep(5)
+    print("✅ Ngrok tunnel should now be live!")
 
-print("🚀 Starting ngrok tunnel on port", PORT)
-proc = subprocess.Popen([NGROK_PATH, "http", PORT], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+threading.Thread(target=start_ngrok, daemon=True).start()
 
-# === 4️⃣ KEEP SERVER ALIVE ===
-print("✅ Ngrok tunnel started. Waiting for public URL...")
+# === 4️⃣ MINIMAL FLASK APP TO KEEP PORT OPEN ===
+app = Flask(__name__)
 
-# Try to read tunnel URL (optional)
-time.sleep(5)
-try:
-    import requests
-    resp = requests.get("http://localhost:4040/api/tunnels")
-    if resp.ok:
-        tunnels = resp.json()["tunnels"]
-        if tunnels:
-            print("🌐 Public URL:", tunnels[0]["public_url"])
-except Exception as e:
-    print("⚠️ Could not fetch public URL:", e)
+@app.route("/")
+def index():
+    return "✅ Ngrok tunnel service is active on Render Free Plan!"
 
-while True:
-    time.sleep(60)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(PORT))
