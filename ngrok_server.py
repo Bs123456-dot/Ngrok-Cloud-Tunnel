@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-NGROK_AUTH = os.environ.get("34lyt5Atxx1o6wzwjc9DbOluYn8_7NVpquS6mBJKoSYkCVCrj")
+NGROK_AUTH = os.environ.get("NGROK_AUTH_TOKEN")
 PORT = os.environ.get("PORT", "5000")
 
 if not NGROK_AUTH:
