@@ -35,20 +35,29 @@ def start_ngrok():
     print("🔑 Adding ngrok auth token...")
     subprocess.run([NGROK_PATH, "config", "add-authtoken", NGROK_AUTH], check=True)
     print("🚀 Starting ngrok tunnel on port", PORT)
-    ngrok_process = subprocess.Popen([NGROK_PATH, "http", PORT], stdout=subprocess.PIPE)
+    ngrok_process = subprocess.Popen([NGROK_PATH, "http", PORT], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-    # Wait for tunnel info to appear in the API
-    time.sleep(8)
-    try:
-        import requests
-        resp = requests.get("http://localhost:4040/api/tunnels")
-        data = resp.json()
-        public_url = data["tunnels"][0]["public_url"]
-        print("🌐 NGROK TUNNEL URL:", public_url)
-    except Exception as e:
-        print("⚠️ Could not fetch tunnel URL:", e)
+    # Wait and try repeatedly to get the public URL
+    import requests
+    tunnel_url = None
+    for i in range(15):  # try for ~30 seconds
+        time.sleep(2)
+        try:
+            resp = requests.get("http://localhost:4040/api/tunnels")
+            data = resp.json()
+            if data.get("tunnels"):
+                tunnel_url = data["tunnels"][0]["public_url"]
+                break
+        except Exception:
+            continue
 
-threading.Thread(target=start_ngrok, daemon=True).start()
+    if tunnel_url:
+        print(f"🌐 NGROK TUNNEL URL: {tunnel_url}")
+        # store it globally so Flask can serve it
+        global current_tunnel_url
+        current_tunnel_url = tunnel_url
+    else:
+        print("⚠️ Could not detect tunnel URL from localhost:4040")
 
 # === FLASK SERVER ===
 app = Flask(__name__)
